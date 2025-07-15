@@ -4,17 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Výběr nápojů s Firebase - Editace objednávek</title>
-  <!-- CSS a skripty zachovány, odstraněno pro úsporu místa -->
   <style>
-    /* Styl zachován (zkráceno v této ukázce) */
+    body { font-family: sans-serif; padding: 20px; background: #f0f0f0; }
+    h1, h2 { margin-top: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .item { border: 1px solid #ccc; padding: 10px; text-align: center; background: white; cursor: pointer; }
+    .item img { width: 100%; max-height: 100px; object-fit: contain; }
+    .price { font-weight: bold; }
+    #cart, #orders-list { margin-top: 30px; background: white; padding: 15px; border-radius: 5px; }
+    .cart-item { display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .cart-item button { background: red; color: white; border: none; border-radius: 3px; cursor: pointer; }
+    .order { border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px; }
+    .order-buttons { margin-top: 10px; }
+    .order-buttons button { margin-right: 10px; }
+    #notification { display: none; padding: 10px; background: #e0ffe0; border: 1px solid #0a0; margin-bottom: 10px; }
   </style>
 </head>
 <body>
-  <p>Test načtení</p>
   <div id="notification"></div>
 
   <h1>Výběr nápojů</h1>
-
   <div class="grid" id="items-grid"></div>
 
   <div id="cart">
@@ -31,7 +40,6 @@
     <div id="orders-container"></div>
   </div>
 
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
@@ -49,8 +57,22 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Data nápojů (zkráceno pro přehlednost)
-    const drinks = [ /* ... */ ];
+    const drinks = [
+      {
+        category: "Nealko",
+        items: [
+          { name: "Voda", price: 20, img: "https://via.placeholder.com/100?text=Voda" },
+          { name: "Cola", price: 30, img: "https://via.placeholder.com/100?text=Cola" }
+        ]
+      },
+      {
+        category: "Alko",
+        items: [
+          { name: "Pivo", price: 35, img: "https://via.placeholder.com/100?text=Pivo" },
+          { name: "Víno", price: 50, img: "https://via.placeholder.com/100?text=Víno" }
+        ]
+      }
+    ];
 
     const itemsGrid = document.getElementById("items-grid");
     const cartItemsDiv = document.getElementById("cart-items");
@@ -80,7 +102,6 @@
       drinks.forEach(group => {
         const heading = document.createElement("h2");
         heading.textContent = group.category;
-        heading.style.marginTop = "30px";
         heading.style.gridColumn = "1 / -1";
         itemsGrid.appendChild(heading);
 
@@ -113,34 +134,17 @@
     }
 
     function renderCart() {
-  cartItemsDiv.innerHTML = "";
-  let total = 0;
-  const names = Object.keys(cart);
-  if (names.length === 0) {
-    cartItemsDiv.innerHTML = "<em>Košík je prázdný.</em>";
-    totalDiv.textContent = "Celkem: 0 Kč"; // 💡 TADY jsme přidali nulování
-    saveOrderBtn.disabled = true;
-    cancelEditBtn.style.display = "none";
-    editModeLabel.textContent = "";
-    return;
-  }
-  names.forEach(name => {
-    const item = cart[name];
-    total += item.price * item.count;
-    const div = document.createElement("div");
-    div.className = "cart-item";
-    div.innerHTML = `
-      <span>${name} x ${item.count} (${item.price * item.count} Kč)</span>
-      <button aria-label="Odebrat jednu položku ${name}">−</button>
-    `;
-    div.querySelector("button").onclick = () => removeFromCart(name);
-    cartItemsDiv.appendChild(div);
-  });
-  totalDiv.textContent = `Celkem: ${total} Kč`;
-  saveOrderBtn.disabled = false;
-  updateEditMode(!!editingOrderId);
-}
-
+      cartItemsDiv.innerHTML = "";
+      let total = 0;
+      const names = Object.keys(cart);
+      if (names.length === 0) {
+        cartItemsDiv.innerHTML = "<em>Košík je prázdný.</em>";
+        totalDiv.textContent = "Celkem: 0 Kč";
+        saveOrderBtn.disabled = true;
+        cancelEditBtn.style.display = "none";
+        editModeLabel.textContent = "";
+        return;
+      }
       names.forEach(name => {
         const item = cart[name];
         total += item.price * item.count;
@@ -148,7 +152,7 @@
         div.className = "cart-item";
         div.innerHTML = `
           <span>${name} x ${item.count} (${item.price * item.count} Kč)</span>
-          <button aria-label="Odebrat jednu položku ${name}">−</button>
+          <button>−</button>
         `;
         div.querySelector("button").onclick = () => removeFromCart(name);
         cartItemsDiv.appendChild(div);
@@ -211,7 +215,6 @@
 
     saveOrderBtn.onclick = saveOrder;
 
-    // Načítání objednávek realtime
     db.collection("orders")
       .orderBy("createdAt", "desc")
       .onSnapshot(snapshot => {
@@ -221,8 +224,8 @@
           const div = document.createElement("div");
           div.className = "order";
           div.innerHTML = `
-            <h3>Objednávka <small>${new Date(data.createdAt?.toDate()).toLocaleString("cs-CZ")}</small></h3>
-            <ul>${data.items.map(i => `<li>${i.name} x ${i.count} (${i.count * i.price} Kč)</li>`).join('')}</ul>
+            <h3>Objednávka <small>${data.createdAt?.toDate().toLocaleString("cs-CZ")}</small></h3>
+            <ul>${data.items.map(i => `<li>${i.name} x ${i.count} (${i.count * i.price} Kč)</li>`).join("")}</ul>
             <strong>Celkem: ${data.total} Kč</strong>
             <div class="order-buttons">
               <button class="edit-btn">Upravit</button>
@@ -231,7 +234,9 @@
           `;
           div.querySelector(".edit-btn").onclick = () => {
             cart = {};
-            data.items.forEach(i => cart[i.name] = { count: i.count, price: i.price });
+            data.items.forEach(i => {
+              cart[i.name] = { count: i.count, price: i.price };
+            });
             editingOrderId = doc.id;
             renderCart();
           };
