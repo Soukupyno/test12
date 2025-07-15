@@ -27,7 +27,7 @@
   <div class="grid" id="items-grid"></div>
 
   <div id="cart">
-    <h2>Souhrn objednávky <span id="edit-mode-label"></span></h2>
+    <h2>Souhrn objednávky <span id="edit-mode-label"></span> <span id="order-name-display"></span></h2>
     <div id="cart-items"></div>
     <div id="total">Celkem: 0 Kč</div>
     <button id="save-order-btn" disabled>Uložit objednávku</button>
@@ -82,6 +82,7 @@
     const cancelEditBtn = document.getElementById("cancel-edit-btn");
     const ordersContainer = document.getElementById("orders-container");
     const editModeLabel = document.getElementById("edit-mode-label");
+    const orderNameDisplay = document.getElementById("order-name-display");
     const notification = document.getElementById("notification");
 
     let cart = {};
@@ -136,13 +137,14 @@
     function renderCart() {
       cartItemsDiv.innerHTML = "";
       let total = 0;
-      const names = Object.keys(cart);
+      const names = Object.keys(cart).filter(k => k !== 'orderName');
       if (names.length === 0) {
         cartItemsDiv.innerHTML = "<em>Košík je prázdný.</em>";
         totalDiv.textContent = "Celkem: 0 Kč";
         saveOrderBtn.disabled = true;
         cancelEditBtn.style.display = "none";
         editModeLabel.textContent = "";
+        orderNameDisplay.textContent = "";
         return;
       }
       names.forEach(name => {
@@ -160,18 +162,23 @@
       totalDiv.textContent = `Celkem: ${total} Kč`;
       saveOrderBtn.disabled = false;
       updateEditMode(!!editingOrderId);
+      orderNameDisplay.textContent = cart.orderName ? ` - ${cart.orderName}` : "";
     }
 
     async function saveOrder() {
-      const items = Object.keys(cart).map(name => ({
-        name,
-        count: cart[name].count,
-        price: cart[name].price
-      }));
+      const items = Object.keys(cart)
+        .filter(name => name !== 'orderName')
+        .map(name => ({
+          name,
+          count: cart[name].count,
+          price: cart[name].price
+        }));
       const total = items.reduce((sum, i) => sum + i.count * i.price, 0);
+      const orderName = cart.orderName || `Objednávka ${new Date().toLocaleString("cs-CZ")}`;
       const data = {
         items,
         total,
+        orderName,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
       try {
@@ -224,7 +231,7 @@
           const div = document.createElement("div");
           div.className = "order";
           div.innerHTML = `
-            <h3>Objednávka <small>${data.createdAt?.toDate().toLocaleString("cs-CZ")}</small></h3>
+            <h3>${data.orderName || "Objednávka"} <small>${data.createdAt?.toDate().toLocaleString("cs-CZ")}</small></h3>
             <ul>${data.items.map(i => `<li>${i.name} x ${i.count} (${i.count * i.price} Kč)</li>`).join("")}</ul>
             <strong>Celkem: ${data.total} Kč</strong>
             <div class="order-buttons">
@@ -237,6 +244,7 @@
             data.items.forEach(i => {
               cart[i.name] = { count: i.count, price: i.price };
             });
+            cart.orderName = data.orderName || `Objednávka`;
             editingOrderId = doc.id;
             renderCart();
           };
