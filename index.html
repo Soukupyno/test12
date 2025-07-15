@@ -87,11 +87,11 @@
         group.items.forEach(drink => {
           const div = document.createElement("div");
           div.className = "item";
-          div.innerHTML = 
+          div.innerHTML = `
             <img src="${drink.img}" alt="${drink.name}">
             <div>${drink.name}</div>
             <div class="price">${drink.price} Kč</div>
-          ;
+          `;
           div.onclick = () => addToCart(drink.name, drink.price);
           itemsGrid.appendChild(div);
         });
@@ -128,14 +128,14 @@
         total += item.price * item.count;
         const div = document.createElement("div");
         div.className = "cart-item";
-        div.innerHTML = 
+        div.innerHTML = `
           <span>${name} x ${item.count} (${item.price * item.count} Kč)</span>
           <button aria-label="Odebrat jednu položku ${name}">−</button>
-        ;
+        `;
         div.querySelector("button").onclick = () => removeFromCart(name);
         cartItemsDiv.appendChild(div);
       });
-      totalDiv.textContent = Celkem: ${total} Kč;
+      totalDiv.textContent = `Celkem: ${total} Kč`;
       saveOrderBtn.disabled = false;
       updateEditMode(!!editingOrderId);
     }
@@ -202,15 +202,15 @@
           const data = doc.data();
           const div = document.createElement("div");
           div.className = "order";
-          div.innerHTML = 
+          div.innerHTML = `
             <h3>Objednávka <small>${new Date(data.createdAt?.toDate()).toLocaleString("cs-CZ")}</small></h3>
-            <ul>${data.items.map(i => <li>${i.name} x ${i.count} (${i.count * i.price} Kč)</li>).join('')}</ul>
+            <ul>${data.items.map(i => `<li>${i.name} x ${i.count} (${i.count * i.price} Kč)</li>`).join('')}</ul>
             <strong>Celkem: ${data.total} Kč</strong>
             <div class="order-buttons">
               <button class="edit-btn">Upravit</button>
               <button class="delete-btn">Smazat</button>
             </div>
-          ;
+          `;
           div.querySelector(".edit-btn").onclick = () => {
             cart = {};
             data.items.forEach(i => cart[i.name] = { count: i.count, price: i.price });
