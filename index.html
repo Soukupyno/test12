@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Výběr nápojů s Firebase - Editace objednávek</title>
+  <style>
+    /* ... (styly stejné jako předtím, zkráceno pro přehlednost) ... */
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f4f4f4;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 15px;
+    }
+    .item {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .item:hover {
+      transform: scale(1.05);
+    }
+    .item img {
+      max-width: 80px;
+      height: auto;
+    }
+    .price {
+      font-weight: bold;
+      margin-top: 5px;
+    }
+    #cart {
+      margin-top: 30px;
+      background: white;
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    #cart-items {
+      margin-bottom: 15px;
+    }
+    .cart-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    #total {
+      font-weight: bold;
+      text-align: right;
+      margin-bottom: 15px;
+    }
+    button {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    #orders-list {
+      margin-top: 40px;
+    }
+    .order {
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      position: relative;
+    }
+    .order h3 {
+      margin: 0 0 5px 0;
+    }
+    .order ul {
+      padding-left: 20px;
+      margin: 0 0 5px 0;
+    }
+    .order-buttons {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+    }
+    .order-buttons button {
+      margin-left: 5px;
+      padding: 5px 8px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+    }
+    .order-buttons button.edit-btn {
+      background: #3498db;
+      color: white;
+    }
+    .order-buttons button.delete-btn {
+      background: #e74c3c;
+      color: white;
+    }
+    #edit-mode-label {
+      color: #e67e22;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+<p>Test načtení</p>
+  <h1>Výběr nápojů</h1>
+
+  <div class="grid" id="items-grid"></div>
+
+  <div id="cart">
+    <h2>Souhrn objednávky <span id="edit-mode-label"></span></h2>
+    <div id="cart-items"></div>
+    <div id="total">Celkem: 0 Kč</div>
+    <button id="save-order-btn" disabled>Uložit objednávku</button>
+    <button id="reset-cart-btn">Resetovat košík</button>
+    <button id="cancel-edit-btn" style="display:none; margin-left:10px; background:#95a5a6;">Zrušit úpravu</button>
+  </div>
+
+  <div id="orders-list">
+    <h2>Všechny objednávky (realtime)</h2>
+    <div id="orders-container"></div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyD2VESn4b3jQQF9hHdMxh888wCL7_0yLeU",
+      authDomain: "napoje-9b5a8.firebaseapp.com",
+      projectId: "napoje-9b5a8",
+      storageBucket: "napoje-9b5a8.appspot.com",
+      messagingSenderId: "362328854828",
+      appId: "1:362328854828:web:137feb51cd3f79202f5c89",
+      measurementId: "G-P3TVEVEJP6"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const drinks = [
+      { name: "Coca-Cola 0,5l", price: 40, img: "images/cola.png" },
+      { name: "Coca-Cola 0,3l", price: 25, img: "images/cola.png" },
+      { name: "Jagemeister 0,04l", price: 50, img: "images/jager.png" },
+      { name: "Jagemeister 0,02l", price: 35, img: "images/jager.png" },
+      { name: "Merlot 2dcl", price: 35, img: "images/Merlot.png" }
+    ];
+
+    const itemsGrid = document.getElementById("items-grid");
+    const cartItemsDiv = document.getElementById("cart-items");
+    const totalDiv = document.getElementById("total");
+    const saveOrderBtn = document.getElementById("save-order-btn");
+    const resetCartBtn = document.getElementById("reset-cart-btn");
+    const cancelEditBtn = document.getElementById("cancel-edit-btn");
+    const ordersContainer = document.getElementById("orders-container");
+    const editModeLabel = document.getElementById("edit-mode-label");
+
+    let cart = {};
+    let editingOrderId = null;
+
+    function renderItems() {
+      itemsGrid.innerHTML = "";
+      drinks.forEach(drink => {
+        const div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = `
+          <img src="${drink.img}" alt="${drink.name}">
+          <div>${drink.name}</div>
+          <div class="price">${drink.price} Kč</div>
+        `;
+        div.onclick = () => addToCart(drink.name, drink.price);
+        itemsGrid.appendChild(div);
+      });
+    }
+
+    function addToCart(name, price) {
+      if (!cart[name]) {
+        cart[name] = { count: 0, price: price };
+      }
+      cart[name].count++;
+      renderCart();
+    }
+
+    function removeFromCart(name) {
+      if (cart[name]) {
+        cart[name].count--;
+        if (cart[name].count <= 0) {
+          delete cart[name];
+        }
+        renderCart();
+      }
+    }
+
+    function renderCart() {
+      cartItemsDiv.innerHTML = "";
+      let total = 0;
+      for (const name in cart) {
+        const item = cart[name];
+        const itemTotal = item.count * item.price;
+        total += itemTotal;
+
+        const div = document.createElement("div");
+        div.className = "cart-item";
+        div.innerHTML = `
+          <span>${name} (${item.count} ks)</span>
+          <span>${itemTotal} Kč <button onclick="removeFromCart('${name}')" style="color:red; border:none; background:none; cursor:pointer;">&times;</button></span>
+        `;
+        cartItemsDiv.appendChild(div);
+      }
+      totalDiv.textContent = `Celkem: ${total} Kč`;
+
+      saveOrderBtn.disabled = (total === 0);
+    }
+
+    resetCartBtn.onclick = () => {
+      cart = {};
+      editingOrderId = null;
+      updateEditMode(false);
+      renderCart();
+    };
+
+    cancelEditBtn.onclick = () => {
+      cart = {};
+      editingOrderId = null;
+      updateEditMode(false);
+      renderCart();
+    };
+
+    saveOrderBtn.onclick = async () => {
+      if (Object.keys(cart).length === 0) {
+        alert("Košík je prázdný!");
+        return;
+      }
+
+      let total = 0;
+      const items = [];
+      for (const name in cart) {
+        items.push({
+          name,
+          count: cart[name].count,
+          price: cart[name].price
+        });
+        total += cart[name].count * cart[name].price;
+      }
+
+      const order = {
+        items,
+        total,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      try {
+        if (editingOrderId) {
+          // Update existující objednávku podle ID
+          await db.collection("orders").doc(editingOrderId).update(order);
+          alert("Objednávka upravena.");
+        } else {
+          // Přidat novou objednávku
+          await db.collection("orders").add(order);
+          alert("Objednávka uložena.");
+        }
+        cart = {};
+        editingOrderId = null;
+        updateEditMode(false);
+        renderCart();
+      } catch (error) {
+        alert("Chyba při ukládání objednávky: " + error.message);
+      }
+    };
+
+    function updateEditMode(isEditing) {
+      if (isEditing) {
+        editModeLabel.textContent = "(Úprava objednávky)";
+        cancelEditBtn.style.display = "inline-block";
+        saveOrderBtn.textContent = "Uložit změny";
+      } else {
+        editModeLabel.textContent = "";
+        cancelEditBtn.style.display = "none";
+        saveOrderBtn.textContent = "Uložit objednávku";
+      }
+    }
+
+    function renderOrders(orders) {
+      ordersContainer.innerHTML = "";
+      orders.forEach(doc => {
+        const data = doc.data();
+        const orderId = doc.id;
+        const orderDiv = document.createElement("div");
+        orderDiv.className = "order";
+
+        const date = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toLocaleString() : "";
+
+        orderDiv.innerHTML = `
+          <h3>Objednávka #${orderId.substring(0,6)} <small>${date}</small></h3>
+          <ul>
+            ${data.items.map(i => `<li>${i.name} x ${i.count} (${i.price} Kč)</li>`).join("")}
+          </ul>
+          <strong>Celkem: ${data.total} Kč</strong>
+          <div class="order-buttons">
+            <button class="edit-btn">Upravit</button>
+            <button class="delete-btn">Smazat</button>
+          </div>
+        `;
+
+        // Edit button event
+        orderDiv.querySelector(".edit-btn").onclick = () => {
+          cart = {};
+          data.items.forEach(i => {
+            cart[i.name] = { count: i.count, price: i.price };
+          });
+          editingOrderId = orderId;
+          updateEditMode(true);
+          renderCart();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        // Delete button event
+        orderDiv.querySelector(".delete-btn").onclick = async () => {
+          if (confirm("Opravdu chcete smazat tuto objednávku?")) {
+            try {
+              await db.collection("orders").doc(orderId).delete();
+              alert("Objednávka smazána.");
+              if(editingOrderId === orderId) {
+                // Zrušíme úpravu pokud byla právě tahle objednávka editována
+                cart = {};
+                editingOrderId = null;
+                updateEditMode(false);
+                renderCart();
+              }
+            } catch (error) {
+              alert("Chyba při mazání: " + error.message);
+            }
+          }
+        };
+
+        ordersContainer.appendChild(orderDiv);
+      });
+    }
+
+    // Posloucháme realtime aktualizace z Firestore
+    db.collection("orders").orderBy("createdAt", "desc").onSnapshot(snapshot => {
+      renderOrders(snapshot.docs);
+    });
+
+    // Inicializace
+    renderItems();
+    renderCart();
+
+    // Aby funkce removeFromCart byla dostupná z onclick vygenerovaném v HTML
+    window.removeFromCart = removeFromCart;
+  </script>
+
+</body>
+</html>
