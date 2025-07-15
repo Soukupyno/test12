@@ -113,16 +113,34 @@
     }
 
     function renderCart() {
-      cartItemsDiv.innerHTML = "";
-      let total = 0;
-      const names = Object.keys(cart);
-      if (names.length === 0) {
-        cartItemsDiv.innerHTML = "<em>Košík je prázdný.</em>";
-        saveOrderBtn.disabled = true;
-        cancelEditBtn.style.display = "none";
-        editModeLabel.textContent = "";
-        return;
-      }
+  cartItemsDiv.innerHTML = "";
+  let total = 0;
+  const names = Object.keys(cart);
+  if (names.length === 0) {
+    cartItemsDiv.innerHTML = "<em>Košík je prázdný.</em>";
+    totalDiv.textContent = "Celkem: 0 Kč"; // 💡 TADY jsme přidali nulování
+    saveOrderBtn.disabled = true;
+    cancelEditBtn.style.display = "none";
+    editModeLabel.textContent = "";
+    return;
+  }
+  names.forEach(name => {
+    const item = cart[name];
+    total += item.price * item.count;
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    div.innerHTML = `
+      <span>${name} x ${item.count} (${item.price * item.count} Kč)</span>
+      <button aria-label="Odebrat jednu položku ${name}">−</button>
+    `;
+    div.querySelector("button").onclick = () => removeFromCart(name);
+    cartItemsDiv.appendChild(div);
+  });
+  totalDiv.textContent = `Celkem: ${total} Kč`;
+  saveOrderBtn.disabled = false;
+  updateEditMode(!!editingOrderId);
+}
+
       names.forEach(name => {
         const item = cart[name];
         total += item.price * item.count;
